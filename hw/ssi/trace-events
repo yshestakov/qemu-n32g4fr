@@ -62,3 +62,8 @@ allwinner_a10_spi_tx(uint8_t byte) "write 0x%02x"
 allwinner_a10_spi_rx(uint8_t byte) "read 0x%02x"
 allwinner_a10_spi_read(const char* regname, uint32_t value) "reg[%s] => 0x%08x"
 allwinner_a10_spi_write(const char* regname, uint32_t value) "reg[%s] <= 0x%08x"
+
+# n32g4fr_spi.c
+n32g4fr_spi_read(uint64_t addr, uint32_t val) "reg 0x%02" PRIx64 " -> 0x%04" PRIx32
+n32g4fr_spi_write(uint64_t addr, uint32_t val) "reg 0x%02" PRIx64 " <- 0x%04" PRIx32
+n32g4fr_spi_transfer(uint32_t tx, uint32_t rx) "tx 0x%04" PRIx32 " rx 0x%04" PRIx32
