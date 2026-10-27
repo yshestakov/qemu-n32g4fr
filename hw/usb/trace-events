@@ -377,3 +377,12 @@ canokey_handle_data_out(uint8_t ep_out, uint32_t out_len) "ep %d len %d"
 canokey_handle_data_in(uint8_t ep_in, uint32_t in_len) "ep %d len %d"
 canokey_realize(void)
 canokey_unrealize(void)
+
+# n32g4fr_usbd.c
+n32g4fr_usbd_read(uint64_t addr, uint32_t val) "reg 0x%02" PRIx64 " -> 0x%04" PRIx32
+n32g4fr_usbd_write(uint64_t addr, uint32_t val) "reg 0x%02" PRIx64 " <- 0x%04" PRIx32
+n32g4fr_usbd_host_state(const char *state) "host %s"
+n32g4fr_usbd_setup(uint8_t type, uint8_t req, uint16_t value, uint16_t index, uint16_t len) "SETUP type 0x%02x req 0x%02x value 0x%04x index 0x%04x len %u"
+n32g4fr_usbd_in(int ep, int len) "IN ep%d %d bytes"
+n32g4fr_usbd_out(int ep, int len) "OUT ep%d %d bytes"
+n32g4fr_usbd_cdc(int comm_iface, int bulk_in, int bulk_out, int notify_in) "CDC-ACM interface %d bulk IN ep%d OUT ep%d notify ep%d"
