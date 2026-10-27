@@ -65,6 +65,9 @@
 #define CTRL2_CTU       BIT(1)
 #define CTRL2_ENCAL     BIT(2)
 #define CTRL2_ENDMA     BIT(8)
+#define CTRL2_EXTRSEL_SHIFT 17
+/* EXTRSEL = 7 selects the software start (SWSTRRCH) */
+#define CTRL2_EXTRSEL_SW    7
 #define CTRL2_EXTRTRIG  BIT(20)
 #define CTRL2_SWSTRJCH  BIT(21)
 #define CTRL2_SWSTRRCH  BIT(22)
@@ -195,9 +198,13 @@ static void n32g4fr_adc_write(void *opaque, hwaddr addr,
             qemu_log_mask(LOG_UNIMP, "%s: injected channels not "
                           "implemented\n", __func__);
         }
-        if (value & CTRL2_EXTRTRIG) {
-            qemu_log_mask(LOG_UNIMP, "%s: external triggers not "
-                          "implemented\n", __func__);
+        if ((value & CTRL2_EXTRTRIG) &&
+            extract32(value, CTRL2_EXTRSEL_SHIFT, 3) != CTRL2_EXTRSEL_SW &&
+            ((value ^ REG(s, ADC_CTRL2)) &
+             (CTRL2_EXTRTRIG | (7 << CTRL2_EXTRSEL_SHIFT)))) {
+            qemu_log_mask(LOG_UNIMP, "%s: external trigger %d not "
+                          "implemented\n", __func__,
+                          extract32(value, CTRL2_EXTRSEL_SHIFT, 3));
         }
         /* Calibration completes at once; start bits are self-clearing */
         REG(s, ADC_CTRL2) = value & ~(CTRL2_ENCAL | CTRL2_SWSTRRCH |
