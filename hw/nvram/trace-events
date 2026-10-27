@@ -22,3 +22,9 @@ fw_cfg_add_i64(uint16_t key_value, const char *key_name, uint64_t value) "key 0x
 # mac_nvram.c
 macio_nvram_read(uint32_t addr, uint8_t val) "read addr=0x%04"PRIx32" val=0x%02x"
 macio_nvram_write(uint32_t addr, uint8_t val) "write addr=0x%04"PRIx32" val=0x%02x"
+
+# n32g4fr_flash.c
+n32g4fr_flash_reg_read(uint64_t addr, uint32_t val) "reg 0x%02" PRIx64 " -> 0x%08" PRIx32
+n32g4fr_flash_reg_write(uint64_t addr, uint32_t val) "reg 0x%02" PRIx64 " <- 0x%08" PRIx32
+n32g4fr_flash_program(uint64_t offset, uint64_t val) "program offset 0x%05" PRIx64 " = 0x%08" PRIx64
+n32g4fr_flash_erase(uint64_t offset, uint64_t size) "erase offset 0x%05" PRIx64 " size 0x%" PRIx64
