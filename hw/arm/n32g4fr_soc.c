@@ -33,18 +33,65 @@
 
 /*
  * Addresses and IRQ numbers are from the N32G4FR Datasheet V2.5.0 memory
- * map and User Manual V3.5.0 (Table 7-1 vector table). The USARTs and
- * TIM2-5 are register compatible with the STM32F2xx models.
+ * map, the Nationstech N32G4FR.svd and User Manual V3.5.0 (Table 7-1
+ * vector table, Tables 8-4/8-5 DMA request mapping). The timers are
+ * register compatible with the STM32F2xx model.
  */
 #define RCC_ADDR                       0x40021000
+static const uint32_t dma_addr[] = { 0x40020000, 0x40020400 };
+static const int dma_irq[N32_NUM_DMAS][N32G4FR_DMA_NUM_CHANNELS] = {
+    { 11, 12, 13, 14, 15, 16, 17, 76 },
+    { 56, 57, 58, 59, 60, 68, 69, 77 },
+};
+
+/* USART1-3, UART4-7 */
 static const uint32_t usart_addr[] = { 0x40013800, 0x40004400, 0x40004800,
                                        0x40004C00, 0x40005000, 0x40015000,
                                        0x40015400 };
-static const uint32_t timer_addr[] = { 0x40000000, 0x40000400,
-                                       0x40000800, 0x40000C00 };
-
 static const int usart_irq[] = { 37, 38, 39, 52, 53, 74, 75 };
-static const int timer_irq[] = { 28, 29, 30, 50 };
+/* USART1 and UART6/7 are on APB2 */
+static const bool usart_apb2[] = { true, false, false, false, false,
+                                   true, true };
+/* DMA controller (0-based) and request numbers: TX, RX */
+static const int usart_dma[][3] = {
+    { 0, N32G4FR_DMA1_REQ_USART1_TX, N32G4FR_DMA1_REQ_USART1_RX },
+    { 0, N32G4FR_DMA1_REQ_USART2_TX, N32G4FR_DMA1_REQ_USART2_RX },
+    { 0, N32G4FR_DMA1_REQ_USART3_TX, N32G4FR_DMA1_REQ_USART3_RX },
+    { 1, N32G4FR_DMA2_REQ_UART4_TX, N32G4FR_DMA2_REQ_UART4_RX },
+    { 0, N32G4FR_DMA1_REQ_UART5_TX, N32G4FR_DMA1_REQ_UART5_RX },
+    { 1, N32G4FR_DMA2_REQ_UART6_TX, N32G4FR_DMA2_REQ_UART6_RX },
+    { 1, N32G4FR_DMA2_REQ_UART7_TX, N32G4FR_DMA2_REQ_UART7_RX },
+};
+
+/* SPI1-3 */
+static const uint32_t spi_addr[] = { 0x40013000, 0x40003800, 0x40003C00 };
+static const int spi_irq[] = { 35, 36, 51 };
+static const int spi_dma[][3] = {
+    { 0, N32G4FR_DMA1_REQ_SPI1_TX, N32G4FR_DMA1_REQ_SPI1_RX },
+    { 0, N32G4FR_DMA1_REQ_SPI2_TX, N32G4FR_DMA1_REQ_SPI2_RX },
+    { 1, N32G4FR_DMA2_REQ_SPI3_TX, N32G4FR_DMA2_REQ_SPI3_RX },
+};
+
+/* ADC1/2 share the ADC1_2 interrupt */
+static const uint32_t adc_addr[] = { 0x40020800, 0x40020C00 };
+#define ADC_IRQ 18
+static const int adc_dma_req[] = { N32G4FR_DMA1_REQ_ADC1,
+                                   N32G4FR_DMA1_REQ_ADC2 };
+
+/* TIM1 (update interrupt), TIM2-5 */
+static const uint32_t timer_addr[] = { 0x40012C00, 0x40000000, 0x40000400,
+                                       0x40000800, 0x40000C00 };
+static const int timer_irq[] = { 25, 28, 29, 30, 50 };
+static const bool timer_apb2[] = { true, false, false, false, false };
+
+/*
+ * Bus clocks as programmed by the vendor SystemInit: SYSCLK = HCLK =
+ * 144 MHz, APB2 = HCLK / 2, APB1 = HCLK / 4. Timer clocks are twice their
+ * APB clock since the APB prescalers are not 1.
+ * TODO: derive these from the RCC once it models clock frequencies.
+ */
+#define PCLK2_FRQ 72000000
+#define PCLK1_FRQ 36000000
 
 
 static void n32g4fr_soc_initfn(Object *obj)
@@ -56,9 +103,22 @@ static void n32g4fr_soc_initfn(Object *obj)
 
     object_initialize_child(obj, "rcc", &s->rcc, TYPE_N32G4FR_RCC);
 
+    for (i = 0; i < N32_NUM_DMAS; i++) {
+        object_initialize_child(obj, "dma[*]", &s->dma[i], TYPE_N32G4FR_DMA);
+    }
+
     for (i = 0; i < N32_NUM_USARTS; i++) {
         object_initialize_child(obj, "usart[*]", &s->usart[i],
-                                TYPE_STM32F2XX_USART);
+                                TYPE_N32G4FR_USART);
+    }
+
+    for (i = 0; i < N32_NUM_SPIS; i++) {
+        object_initialize_child(obj, "spi[*]", &s->spi[i], TYPE_N32G4FR_SPI);
+    }
+
+    object_initialize_child(obj, "adc-orirq", &s->adc_irqs, TYPE_OR_IRQ);
+    for (i = 0; i < N32_NUM_ADCS; i++) {
+        object_initialize_child(obj, "adc[*]", &s->adc[i], TYPE_N32G4FR_ADC);
     }
 
     for (i = 0; i < N32_NUM_TIMERS; i++) {
@@ -153,22 +213,88 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
     busdev = SYS_BUS_DEVICE(dev);
     sysbus_mmio_map(busdev, 0, RCC_ADDR);
 
+    /* DMA controllers */
+    for (i = 0; i < N32_NUM_DMAS; i++) {
+        dev = DEVICE(&s->dma[i]);
+        qdev_prop_set_uint8(dev, "controller", i + 1);
+        object_property_set_link(OBJECT(dev), "downstream",
+                                 OBJECT(system_memory), &error_abort);
+        if (!sysbus_realize(SYS_BUS_DEVICE(dev), errp)) {
+            return;
+        }
+        busdev = SYS_BUS_DEVICE(dev);
+        sysbus_mmio_map(busdev, 0, dma_addr[i]);
+        for (int ch = 0; ch < N32G4FR_DMA_NUM_CHANNELS; ch++) {
+            sysbus_connect_irq(busdev, ch,
+                               qdev_get_gpio_in(armv7m, dma_irq[i][ch]));
+        }
+    }
+
     /* Attach UART (uses USART registers) and USART controllers */
     for (i = 0; i < N32_NUM_USARTS; i++) {
+        DeviceState *dma = DEVICE(&s->dma[usart_dma[i][0]]);
+
         dev = DEVICE(&(s->usart[i]));
         qdev_prop_set_chr(dev, "chardev", serial_hd(i));
+        qdev_prop_set_uint32(dev, "pclk-frequency",
+                             usart_apb2[i] ? PCLK2_FRQ : PCLK1_FRQ);
         if (!sysbus_realize(SYS_BUS_DEVICE(&s->usart[i]), errp)) {
             return;
         }
         busdev = SYS_BUS_DEVICE(dev);
         sysbus_mmio_map(busdev, 0, usart_addr[i]);
         sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, usart_irq[i]));
+        qdev_connect_gpio_out_named(dev, N32G4FR_USART_DMA_TX, 0,
+                                    qdev_get_gpio_in(dma, usart_dma[i][1]));
+        qdev_connect_gpio_out_named(dev, N32G4FR_USART_DMA_RX, 0,
+                                    qdev_get_gpio_in(dma, usart_dma[i][2]));
     }
 
-    /* Timer 2 to 5 */
+    /* SPI controllers */
+    for (i = 0; i < N32_NUM_SPIS; i++) {
+        DeviceState *dma = DEVICE(&s->dma[spi_dma[i][0]]);
+
+        dev = DEVICE(&s->spi[i]);
+        if (!sysbus_realize(SYS_BUS_DEVICE(dev), errp)) {
+            return;
+        }
+        busdev = SYS_BUS_DEVICE(dev);
+        sysbus_mmio_map(busdev, 0, spi_addr[i]);
+        sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, spi_irq[i]));
+        qdev_connect_gpio_out_named(dev, N32G4FR_SPI_DMA_TX, 0,
+                                    qdev_get_gpio_in(dma, spi_dma[i][1]));
+        qdev_connect_gpio_out_named(dev, N32G4FR_SPI_DMA_RX, 0,
+                                    qdev_get_gpio_in(dma, spi_dma[i][2]));
+    }
+
+    /* ADC devices, the IRQs are ORed together */
+    object_property_set_int(OBJECT(&s->adc_irqs), "num-lines", N32_NUM_ADCS,
+                            &error_abort);
+    if (!qdev_realize(DEVICE(&s->adc_irqs), NULL, errp)) {
+        return;
+    }
+    qdev_connect_gpio_out(DEVICE(&s->adc_irqs), 0,
+                          qdev_get_gpio_in(armv7m, ADC_IRQ));
+
+    for (i = 0; i < N32_NUM_ADCS; i++) {
+        dev = DEVICE(&s->adc[i]);
+        if (!sysbus_realize(SYS_BUS_DEVICE(dev), errp)) {
+            return;
+        }
+        busdev = SYS_BUS_DEVICE(dev);
+        sysbus_mmio_map(busdev, 0, adc_addr[i]);
+        sysbus_connect_irq(busdev, 0,
+                           qdev_get_gpio_in(DEVICE(&s->adc_irqs), i));
+        qdev_connect_gpio_out_named(dev, N32G4FR_ADC_DMA, 0,
+                                    qdev_get_gpio_in(DEVICE(&s->dma[0]),
+                                                     adc_dma_req[i]));
+    }
+
+    /* TIM1 and TIM2 to 5 */
     for (i = 0; i < N32_NUM_TIMERS; i++) {
         dev = DEVICE(&(s->timer[i]));
-        qdev_prop_set_uint64(dev, "clock-frequency", 1000000000);
+        qdev_prop_set_uint64(dev, "clock-frequency",
+                             2ULL * (timer_apb2[i] ? PCLK2_FRQ : PCLK1_FRQ));
         if (!sysbus_realize(SYS_BUS_DEVICE(&s->timer[i]), errp)) {
             return;
         }
@@ -183,11 +309,14 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
     /* APB1 */
     create_unimplemented_device("timer[6]",    0x40001000, 0x400);
     create_unimplemented_device("timer[7]",    0x40001400, 0x400);
+    /*
+     * Shown as reserved in the memory map, but the UM USB chapter places
+     * the USB DP pull-up enable at bit 28 of 0x40001820.
+     */
+    create_unimplemented_device("SYSCTL",      0x40001800, 0x400);
     create_unimplemented_device("RTC",         0x40002800, 0x400);
     create_unimplemented_device("WWDG",        0x40002C00, 0x400);
     create_unimplemented_device("IWDG",        0x40003000, 0x400);
-    create_unimplemented_device("SPI2",        0x40003800, 0x400);
-    create_unimplemented_device("SPI3",        0x40003C00, 0x400);
     create_unimplemented_device("I2C1",        0x40005400, 0x400);
     create_unimplemented_device("I2C2",        0x40005800, 0x400);
     create_unimplemented_device("USB",         0x40005C00, 0x400);
@@ -206,8 +335,6 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
     create_unimplemented_device("GPIOC",       0x40011000, 0x400);
     create_unimplemented_device("GPIOD",       0x40011400, 0x400);
     create_unimplemented_device("GPIOE",       0x40011800, 0x400);
-    create_unimplemented_device("timer[1]",    0x40012C00, 0x400);
-    create_unimplemented_device("SPI1",        0x40013000, 0x400);
     create_unimplemented_device("timer[8]",    0x40013400, 0x400);
     create_unimplemented_device("I2C3",        0x40014400, 0x400);
     create_unimplemented_device("I2C4",        0x40014800, 0x400);
@@ -215,10 +342,6 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
     create_unimplemented_device("SDIO",        0x40018000, 0x400);
 
     /* AHB */
-    create_unimplemented_device("DMA1",        0x40020000, 0x400);
-    create_unimplemented_device("DMA2",        0x40020400, 0x400);
-    create_unimplemented_device("ADC1",        0x40020800, 0x400);
-    create_unimplemented_device("ADC2",        0x40020C00, 0x400);
     create_unimplemented_device("Flash Int",   0x40022000, 0x400);
     create_unimplemented_device("CRC",         0x40023000, 0x400);
     create_unimplemented_device("SAC",         0x40024000, 0x400);

@@ -27,8 +27,12 @@
 #define HW_ARM_N32G4FR_SOC_H
 
 #include "hw/misc/n32g4fr_rcc.h"
+#include "hw/dma/n32g4fr_dma.h"
+#include "hw/ssi/n32g4fr_spi.h"
+#include "hw/char/n32g4fr_usart.h"
+#include "hw/adc/n32g4fr_adc.h"
 #include "hw/timer/stm32f2xx_timer.h"
-#include "hw/char/stm32f2xx_usart.h"
+#include "hw/core/or-irq.h"
 #include "hw/arm/armv7m.h"
 #include "qom/object.h"
 
@@ -37,8 +41,11 @@ OBJECT_DECLARE_SIMPLE_TYPE(N32G4FRState, N32G4FR_SOC)
 
 /* USART1-3 and UART4-7 */
 #define N32_NUM_USARTS 7
-/* At the moment only Timer 2 to 5 are modelled */
-#define N32_NUM_TIMERS 4
+/* TIM1 (update interrupt only) and TIM2-5 */
+#define N32_NUM_TIMERS 5
+#define N32_NUM_SPIS 3
+#define N32_NUM_DMAS 2
+#define N32_NUM_ADCS 2
 
 /* N32G4FR User Manual V3.5.0 section 2.2 */
 #define N32_FLASH_BASE_ADDRESS 0x08000000
@@ -56,8 +63,12 @@ struct N32G4FRState {
     ARMv7MState armv7m;
 
     N32G4FRRccState rcc;
-    STM32F2XXUsartState usart[N32_NUM_USARTS];
+    N32G4FRDmaState dma[N32_NUM_DMAS];
+    N32G4FRUsartState usart[N32_NUM_USARTS];
+    N32G4FRSpiState spi[N32_NUM_SPIS];
     STM32F2XXTimerState timer[N32_NUM_TIMERS];
+    OrIRQState adc_irqs;
+    N32G4FRAdcState adc[N32_NUM_ADCS];
 
     MemoryRegion sram;
     MemoryRegion sram_alias;
