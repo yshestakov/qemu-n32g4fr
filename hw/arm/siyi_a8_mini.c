@@ -11,6 +11,14 @@
  * (default 0x08003800) provides the vector table address that bootloader
  * would set.
  *
+ * The application also reads data the bootloader leaves at 0x08000420
+ * onwards (bootloader version and build strings); erased flash there
+ * (0xFF) sends it through a bad pointer. Without a flash backing file the
+ * bootloader area is therefore zero-filled, standing in for a bootloader
+ * that provides nothing. With -drive if=pflash,format=raw,file=... (a
+ * 512 KiB flash image, e.g. a dump including the real bootloader) the
+ * file's contents are used as they are, and flash writes persist in it.
+ *
  * Sensor values can be changed at run time, e.g.
  *   qom-set /machine/imu accel-z 1000
  *   qom-set /machine/encoder[0] angle 16384
@@ -39,17 +47,22 @@
 #include "hw/core/boards.h"
 #include "hw/core/qdev-properties.h"
 #include "hw/core/qdev-clock.h"
+#include "hw/core/loader.h"
 #include "hw/core/irq.h"
 #include "hw/ssi/ssi.h"
 #include "hw/arm/n32g4fr_soc.h"
 #include "hw/arm/boot.h"
 #include "hw/arm/machines-qom.h"
+#include "system/blockdev.h"
+#include "system/block-backend.h"
+#include "hw/core/qdev-properties-system.h"
 
 /* Main SYSCLK frequency in Hz (144MHz) */
 #define SYSCLK_FRQ 144000000ULL
 
 /* Vector table of the vendor application, which sits behind a bootloader */
 #define APP_VTOR 0x08003800
+#define BOOTLOADER_SIZE (APP_VTOR - N32_FLASH_BASE_ADDRESS)
 
 #define NUM_ENCODERS 3
 /* Chip selects: GPIO port (0 = A) and pin */
@@ -90,6 +103,7 @@ static void siyi_a8_mini_init(MachineState *machine)
     SiyiA8MiniMachineState *sms = SIYI_A8_MINI_MACHINE(machine);
     DeviceState *dev;
     N32G4FRState *soc;
+    DriveInfo *dinfo;
     SSIBus *spi2;
     Clock *sysclk;
 
@@ -103,6 +117,17 @@ static void siyi_a8_mini_init(MachineState *machine)
     qdev_connect_clock_in(dev, "sysclk", sysclk);
     object_property_set_uint(OBJECT(&soc->armv7m), "init-nsvtor", sms->vtor,
                              &error_fatal);
+    /* Optional flash backing file: -drive if=pflash,format=raw,file=... */
+    dinfo = drive_get(IF_PFLASH, 0, 0);
+    if (dinfo) {
+        qdev_prop_set_drive_err(DEVICE(&soc->flash), "drive",
+                                blk_by_legacy_dinfo(dinfo), &error_fatal);
+    } else {
+        g_autofree uint8_t *blank = g_malloc0(BOOTLOADER_SIZE);
+
+        rom_add_blob_fixed("siyi-a8-mini.bootloader", blank,
+                           BOOTLOADER_SIZE, N32_FLASH_BASE_ADDRESS);
+    }
     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
 
     spi2 = (SSIBus *)qdev_get_child_bus(DEVICE(&soc->spi[1]), "ssi");
