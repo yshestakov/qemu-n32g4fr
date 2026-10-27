@@ -407,6 +407,7 @@ config N32G4FR_SOC
     select N32G4FR_GPIO
     select N32G4FR_RCC
     select N32G4FR_SPI
+    select N32G4FR_USBD
     select N32G4FR_USART
     select OR_IRQ
     select STM32F2XX_TIMER

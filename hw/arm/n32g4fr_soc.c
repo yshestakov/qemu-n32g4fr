@@ -40,6 +40,10 @@
 #define RCC_ADDR                       0x40021000
 #define FLASH_IF_ADDR                  0x40022000
 #define FLASH_IRQ                      4
+#define USBD_ADDR                      0x40005C00
+#define USBD_PMA_ADDR                  0x40006000
+#define USB_HP_IRQ                     19
+#define USB_LP_IRQ                     20
 static const uint32_t dma_addr[] = { 0x40020000, 0x40020400 };
 static const int dma_irq[N32_NUM_DMAS][N32G4FR_DMA_NUM_CHANNELS] = {
     { 11, 12, 13, 14, 15, 16, 17, 76 },
@@ -113,6 +117,8 @@ static void n32g4fr_soc_initfn(Object *obj)
     object_initialize_child(obj, "rcc", &s->rcc, TYPE_N32G4FR_RCC);
 
     object_initialize_child(obj, "flash", &s->flash, TYPE_N32G4FR_FLASH);
+
+    object_initialize_child(obj, "usbd", &s->usbd, TYPE_N32G4FR_USBD);
 
     for (i = 0; i < N32_NUM_DMAS; i++) {
         object_initialize_child(obj, "dma[*]", &s->dma[i], TYPE_N32G4FR_DMA);
@@ -282,6 +288,23 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
                                     qdev_get_gpio_in(dma, usart_dma[i][2]));
     }
 
+    /*
+     * USB device; its virtual COM port goes to the -serial after the
+     * USARTs, or -global n32g4fr.usbd.chardev=<id>
+     */
+    dev = DEVICE(&s->usbd);
+    if (serial_hd(N32_NUM_USARTS)) {
+        qdev_prop_set_chr(dev, "chardev", serial_hd(N32_NUM_USARTS));
+    }
+    if (!sysbus_realize(SYS_BUS_DEVICE(dev), errp)) {
+        return;
+    }
+    busdev = SYS_BUS_DEVICE(dev);
+    sysbus_mmio_map(busdev, 0, USBD_ADDR);
+    sysbus_mmio_map(busdev, 1, USBD_PMA_ADDR);
+    sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, USB_LP_IRQ));
+    sysbus_connect_irq(busdev, 1, qdev_get_gpio_in(armv7m, USB_HP_IRQ));
+
     /* SPI controllers */
     for (i = 0; i < N32_NUM_SPIS; i++) {
         DeviceState *dma = DEVICE(&s->dma[spi_dma[i][0]]);
@@ -351,8 +374,6 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
     create_unimplemented_device("IWDG",        0x40003000, 0x400);
     create_unimplemented_device("I2C1",        0x40005400, 0x400);
     create_unimplemented_device("I2C2",        0x40005800, 0x400);
-    create_unimplemented_device("USB",         0x40005C00, 0x400);
-    create_unimplemented_device("USB/CAN SRAM", 0x40006000, 0x400);
     create_unimplemented_device("CAN1",        0x40006400, 0x400);
     create_unimplemented_device("CAN2",        0x40006800, 0x400);
     create_unimplemented_device("BKP",         0x40006C00, 0x400);
