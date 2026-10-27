@@ -7,3 +7,6 @@ tmp105_write_shutdown(uint8_t dev) "device: 0x%02x"
 
 # mpu6509.c
 mpu6509_access(uint8_t bank, uint8_t addr, int read, uint8_t val) "bank %u reg 0x%02x read %d val 0x%02x"
+
+# spi_angle_encoder.c
+spi_angle_encoder_transfer(uint16_t angle, uint8_t ret) "angle 0x%04x -> 0x%02x"

@@ -47,3 +47,7 @@ config MAX31785
 config MPU6509
     bool
     depends on SSI
+
+config SPI_ANGLE_ENCODER
+    bool
+    depends on SSI
