@@ -47,3 +47,9 @@ pl330_iomem_read(uint32_t addr, uint32_t data) "addr: 0x%08"PRIx32" data: 0x%08"
 
 # xilinx_axidma.c
 xilinx_axidma_loading_desc_fail(uint32_t res) "error:%u"
+
+# n32g4fr_dma.c
+n32g4fr_dma_read(int dma, uint64_t addr, uint32_t val) "DMA%d read 0x%02" PRIx64 " = 0x%08" PRIx32
+n32g4fr_dma_write(int dma, uint64_t addr, uint32_t val) "DMA%d write 0x%02" PRIx64 " = 0x%08" PRIx32
+n32g4fr_dma_request(int dma, int req, int level) "DMA%d request %d = %d"
+n32g4fr_dma_transfer(int dma, int ch, uint64_t paddr, uint64_t maddr, uint32_t val, uint32_t remaining) "DMA%d ch%d paddr 0x%08" PRIx64 " maddr 0x%08" PRIx64 " val 0x%x remaining %" PRIu32
