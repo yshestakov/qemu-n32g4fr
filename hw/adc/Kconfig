@@ -1,2 +1,5 @@
 config STM32F2XX_ADC
     bool
+
+config N32G4FR_ADC
+    bool
