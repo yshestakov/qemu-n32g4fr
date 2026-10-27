@@ -133,6 +133,12 @@ config OLIMEX_STM32_H405
     depends on TCG && ARM
     select STM32F405_SOC
 
+config N32G4FR
+    bool
+    default y
+    depends on TCG && ARM
+    select N32G4FR_SOC
+
 config OMAP
     bool
     select FRAMEBUFFER
