@@ -44,6 +44,13 @@ static const int dma_irq[N32_NUM_DMAS][N32G4FR_DMA_NUM_CHANNELS] = {
     { 56, 57, 58, 59, 60, 68, 69, 77 },
 };
 
+/* GPIOA-E and their reset values (UM GPIO chapter) */
+static const uint32_t gpio_addr[] = { 0x40010800, 0x40010C00, 0x40011000,
+                                      0x40011400, 0x40011800 };
+static const uint32_t gpio_pl_cfg_reset[] = { 0, 0x00080800, 0, 0, 0 };
+static const uint32_t gpio_ph_cfg_reset[] = { 0x88800000, 0, 0, 0, 0 };
+static const uint32_t gpio_pod_reset[] = { 0xA000, 0x0010, 0, 0, 0 };
+
 /* USART1-3, UART4-7 */
 static const uint32_t usart_addr[] = { 0x40013800, 0x40004400, 0x40004800,
                                        0x40004C00, 0x40005000, 0x40015000,
@@ -105,6 +112,11 @@ static void n32g4fr_soc_initfn(Object *obj)
 
     for (i = 0; i < N32_NUM_DMAS; i++) {
         object_initialize_child(obj, "dma[*]", &s->dma[i], TYPE_N32G4FR_DMA);
+    }
+
+    for (i = 0; i < N32_NUM_GPIOS; i++) {
+        object_initialize_child(obj, "gpio[*]", &s->gpio[i],
+                                TYPE_N32G4FR_GPIO);
     }
 
     for (i = 0; i < N32_NUM_USARTS; i++) {
@@ -230,6 +242,18 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
         }
     }
 
+    /* GPIO ports */
+    for (i = 0; i < N32_NUM_GPIOS; i++) {
+        dev = DEVICE(&s->gpio[i]);
+        qdev_prop_set_uint32(dev, "pl-cfg-reset", gpio_pl_cfg_reset[i]);
+        qdev_prop_set_uint32(dev, "ph-cfg-reset", gpio_ph_cfg_reset[i]);
+        qdev_prop_set_uint32(dev, "pod-reset", gpio_pod_reset[i]);
+        if (!sysbus_realize(SYS_BUS_DEVICE(dev), errp)) {
+            return;
+        }
+        sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, gpio_addr[i]);
+    }
+
     /* Attach UART (uses USART registers) and USART controllers */
     for (i = 0; i < N32_NUM_USARTS; i++) {
         DeviceState *dma = DEVICE(&s->dma[usart_dma[i][0]]);
@@ -330,11 +354,6 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
     /* APB2 */
     create_unimplemented_device("AFIO",        0x40010000, 0x400);
     create_unimplemented_device("EXTI",        0x40010400, 0x400);
-    create_unimplemented_device("GPIOA",       0x40010800, 0x400);
-    create_unimplemented_device("GPIOB",       0x40010C00, 0x400);
-    create_unimplemented_device("GPIOC",       0x40011000, 0x400);
-    create_unimplemented_device("GPIOD",       0x40011400, 0x400);
-    create_unimplemented_device("GPIOE",       0x40011800, 0x400);
     create_unimplemented_device("timer[8]",    0x40013400, 0x400);
     create_unimplemented_device("I2C3",        0x40014400, 0x400);
     create_unimplemented_device("I2C4",        0x40014800, 0x400);
