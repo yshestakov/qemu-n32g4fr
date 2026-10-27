@@ -104,6 +104,9 @@ config FSL_IMX8MP_CCM
 config STM32_RCC
     bool
 
+config N32G4FR_RCC
+    bool
+
 config STM32F2XX_SYSCFG
     bool
 
