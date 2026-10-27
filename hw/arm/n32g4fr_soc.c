@@ -215,8 +215,8 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
     create_unimplemented_device("SDIO",        0x40018000, 0x400);
 
     /* AHB */
-    create_unimplemented_device("DMA2",        0x40020000, 0x400);
-    create_unimplemented_device("DMA1",        0x40020400, 0x400);
+    create_unimplemented_device("DMA1",        0x40020000, 0x400);
+    create_unimplemented_device("DMA2",        0x40020400, 0x400);
     create_unimplemented_device("ADC1",        0x40020800, 0x400);
     create_unimplemented_device("ADC2",        0x40020C00, 0x400);
     create_unimplemented_device("Flash Int",   0x40022000, 0x400);
