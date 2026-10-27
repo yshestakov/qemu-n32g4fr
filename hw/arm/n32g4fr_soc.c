@@ -38,6 +38,8 @@
  * register compatible with the STM32F2xx model.
  */
 #define RCC_ADDR                       0x40021000
+#define FLASH_IF_ADDR                  0x40022000
+#define FLASH_IRQ                      4
 static const uint32_t dma_addr[] = { 0x40020000, 0x40020400 };
 static const int dma_irq[N32_NUM_DMAS][N32G4FR_DMA_NUM_CHANNELS] = {
     { 11, 12, 13, 14, 15, 16, 17, 76 },
@@ -110,6 +112,8 @@ static void n32g4fr_soc_initfn(Object *obj)
 
     object_initialize_child(obj, "rcc", &s->rcc, TYPE_N32G4FR_RCC);
 
+    object_initialize_child(obj, "flash", &s->flash, TYPE_N32G4FR_FLASH);
+
     for (i = 0; i < N32_NUM_DMAS; i++) {
         object_initialize_child(obj, "dma[*]", &s->dma[i], TYPE_N32G4FR_DMA);
     }
@@ -175,18 +179,19 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
     clock_set_mul_div(s->refclk, 8, 1);
     clock_set_source(s->refclk, s->sysclk);
 
-    memory_region_init_rom(&s->flash, OBJECT(dev_soc), "N32G4FR.flash",
-                           N32_FLASH_SIZE, &err);
-    if (err != NULL) {
-        error_propagate(errp, err);
+    /* Flash array and flash interface */
+    dev = DEVICE(&s->flash);
+    qdev_prop_set_uint32(dev, "flash-size", N32_FLASH_SIZE);
+    if (!sysbus_realize(SYS_BUS_DEVICE(dev), errp)) {
         return;
     }
+    busdev = SYS_BUS_DEVICE(dev);
+    sysbus_mmio_map(busdev, 0, FLASH_IF_ADDR);
+    sysbus_mmio_map(busdev, 1, N32_FLASH_BASE_ADDRESS);
     memory_region_init_alias(&s->flash_alias, OBJECT(dev_soc),
-                             "N32G4FR.flash.alias", &s->flash, 0,
+                             "N32G4FR.flash.alias",
+                             sysbus_mmio_get_region(busdev, 1), 0,
                              N32_FLASH_SIZE);
-
-    memory_region_add_subregion(system_memory, N32_FLASH_BASE_ADDRESS,
-                                &s->flash);
     memory_region_add_subregion(system_memory, 0, &s->flash_alias);
 
     memory_region_init_ram(&s->sram, NULL, "N32G4FR.sram", N32_SRAM_SIZE,
@@ -216,6 +221,9 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->armv7m), errp)) {
         return;
     }
+
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->flash), 0,
+                       qdev_get_gpio_in(armv7m, FLASH_IRQ));
 
     /* Reset and clock controller */
     dev = DEVICE(&s->rcc);
@@ -361,7 +369,6 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
     create_unimplemented_device("SDIO",        0x40018000, 0x400);
 
     /* AHB */
-    create_unimplemented_device("Flash Int",   0x40022000, 0x400);
     create_unimplemented_device("CRC",         0x40023000, 0x400);
     create_unimplemented_device("SAC",         0x40024000, 0x400);
     create_unimplemented_device("SAC SRAM",    0x40024400, 0x400);

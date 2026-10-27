@@ -29,6 +29,7 @@
 #include "hw/misc/n32g4fr_rcc.h"
 #include "hw/dma/n32g4fr_dma.h"
 #include "hw/gpio/n32g4fr_gpio.h"
+#include "hw/nvram/n32g4fr_flash.h"
 #include "hw/ssi/n32g4fr_spi.h"
 #include "hw/char/n32g4fr_usart.h"
 #include "hw/adc/n32g4fr_adc.h"
@@ -66,6 +67,7 @@ struct N32G4FRState {
     ARMv7MState armv7m;
 
     N32G4FRRccState rcc;
+    N32G4FRFlashState flash;
     N32G4FRDmaState dma[N32_NUM_DMAS];
     N32G4FRGpioState gpio[N32_NUM_GPIOS];
     N32G4FRUsartState usart[N32_NUM_USARTS];
@@ -76,7 +78,6 @@ struct N32G4FRState {
 
     MemoryRegion sram;
     MemoryRegion sram_alias;
-    MemoryRegion flash;
     MemoryRegion flash_alias;
 
     Clock *sysclk;

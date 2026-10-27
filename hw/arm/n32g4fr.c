@@ -32,6 +32,9 @@
 #include "hw/arm/n32g4fr_soc.h"
 #include "hw/arm/boot.h"
 #include "hw/arm/machines-qom.h"
+#include "system/blockdev.h"
+#include "system/block-backend.h"
+#include "hw/core/qdev-properties-system.h"
 
 /* Main SYSCLK frequency in Hz (144MHz) */
 #define SYSCLK_FRQ 144000000ULL
@@ -39,6 +42,7 @@
 static void n32g4fr_init(MachineState *machine)
 {
     DeviceState *dev;
+    DriveInfo *dinfo;
     Clock *sysclk;
 
     /* This clock doesn't need migration because it is fixed-frequency */
@@ -48,6 +52,12 @@ static void n32g4fr_init(MachineState *machine)
     dev = qdev_new(TYPE_N32G4FR_SOC);
     object_property_add_child(OBJECT(machine), "soc", OBJECT(dev));
     qdev_connect_clock_in(dev, "sysclk", sysclk);
+    /* Optional flash backing file: -drive if=pflash,format=raw,file=... */
+    dinfo = drive_get(IF_PFLASH, 0, 0);
+    if (dinfo) {
+        qdev_prop_set_drive_err(DEVICE(&N32G4FR_SOC(dev)->flash), "drive",
+                                blk_by_legacy_dinfo(dinfo), &error_fatal);
+    }
     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
 
     armv7m_load_kernel(N32G4FR_SOC(dev)->armv7m.cpu,
