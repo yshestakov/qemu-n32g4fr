@@ -139,6 +139,14 @@ config N32G4FR
     depends on TCG && ARM
     select N32G4FR_SOC
 
+config SIYI_A8_MINI
+    bool
+    default y
+    depends on TCG && ARM
+    select N32G4FR_SOC
+    select MPU6509
+    select SPI_ANGLE_ENCODER
+
 config OMAP
     bool
     select FRAMEBUFFER
