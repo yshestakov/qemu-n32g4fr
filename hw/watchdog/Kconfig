@@ -28,3 +28,6 @@ config WDT_SBSA
 config ALLWINNER_WDT
     bool
     select PTIMER
+
+config N32G4FR_IWDG
+    bool

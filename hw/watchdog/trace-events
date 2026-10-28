@@ -51,3 +51,9 @@ sbsa_gwdt_control_write(uint64_t addr, uint64_t value) "[0x%" PRIx64 "] <- 0x%" 
 sbsa_gwdt_ws0_asserted(void) "WS0 signal is asserted"
 sbsa_gwdt_ws1_asserted(void) "WS1 signal is asserted"
 sbsa_gwdt_reset(void) "reset watchdog to default state"
+
+# n32g4fr_iwdg.c
+n32g4fr_iwdg_read(uint64_t addr, uint32_t value) "[0x%" PRIx64 "] -> 0x%" PRIx32
+n32g4fr_iwdg_write(uint64_t addr, uint32_t value) "[0x%" PRIx64 "] <- 0x%" PRIx32
+n32g4fr_iwdg_arm(uint32_t count, unsigned div, int64_t ms) "count 0x%" PRIx32 " div %u: expires in %" PRId64 " ms"
+n32g4fr_iwdg_expired(void) "IWDG expired"
