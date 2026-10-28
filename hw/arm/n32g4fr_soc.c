@@ -40,6 +40,8 @@
  */
 #define RCC_ADDR                       0x40021000
 #define IWDG_ADDR                      0x40003000
+#define PWR_ADDR                       0x40007000
+#define AFIO_ADDR                      0x40010000
 #define FLASH_IF_ADDR                  0x40022000
 #define FLASH_IRQ                      4
 #define USBD_ADDR                      0x40005C00
@@ -118,6 +120,8 @@ static void n32g4fr_soc_initfn(Object *obj)
 
     object_initialize_child(obj, "rcc", &s->rcc, TYPE_N32G4FR_RCC);
     object_initialize_child(obj, "iwdg", &s->iwdg, TYPE_N32G4FR_IWDG);
+    object_initialize_child(obj, "pwr", &s->pwr, TYPE_N32G4FR_PWR);
+    object_initialize_child(obj, "afio", &s->afio, TYPE_N32G4FR_AFIO);
 
     object_initialize_child(obj, "flash", &s->flash, TYPE_N32G4FR_FLASH);
 
@@ -277,6 +281,23 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
     qdev_connect_gpio_out_named(dev, "reset-flag", 0,
                                 qdev_get_gpio_in_named(DEVICE(&s->rcc),
                                                        "iwdg-reset", 0));
+
+    /* Power control: PWR_CTRL2.IWDGRSTEN gates the watchdog reset */
+    dev = DEVICE(&s->pwr);
+    if (!sysbus_realize(SYS_BUS_DEVICE(dev), errp)) {
+        return;
+    }
+    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, PWR_ADDR);
+    qdev_connect_gpio_out_named(dev, "iwdg-reset-en", 0,
+                                qdev_get_gpio_in_named(DEVICE(&s->iwdg),
+                                                       "reset-enable", 0));
+
+    /* Alternate function I/O: remap/EXTI select registers only */
+    dev = DEVICE(&s->afio);
+    if (!sysbus_realize(SYS_BUS_DEVICE(dev), errp)) {
+        return;
+    }
+    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, AFIO_ADDR);
 
     /* DMA controllers */
     for (i = 0; i < N32_NUM_DMAS; i++) {
@@ -441,11 +462,9 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
     create_unimplemented_device("CAN1",        0x40006400, 0x400);
     create_unimplemented_device("CAN2",        0x40006800, 0x400);
     create_unimplemented_device("BKP",         0x40006C00, 0x400);
-    create_unimplemented_device("PWR",         0x40007000, 0x400);
     create_unimplemented_device("DAC",         0x40007400, 0x400);
 
     /* APB2 */
-    create_unimplemented_device("AFIO",        0x40010000, 0x400);
     create_unimplemented_device("EXTI",        0x40010400, 0x400);
     create_unimplemented_device("timer[8]",    0x40013400, 0x400);
     create_unimplemented_device("I2C3",        0x40014400, 0x400);

@@ -402,10 +402,12 @@ config N32G4FR_SOC
     bool
     select ARM_V7M
     select N32G4FR_ADC
+    select N32G4FR_AFIO
     select N32G4FR_DMA
     select N32G4FR_FLASH
     select N32G4FR_GPIO
     select N32G4FR_IWDG
+    select N32G4FR_PWR
     select N32G4FR_RCC
     select N32G4FR_SPI
     select N32G4FR_USBD
