@@ -53,6 +53,8 @@ struct N32G4FRUsbdState {
     uint32_t addr;
     uint32_t buftab;
     uint8_t pma[N32G4FR_USBD_PMA_SIZE];
+    /* DP pull-up (SYSCTL): the device is visible to the host */
+    bool dp_pullup;
 
     /* Virtual host */
     QEMUTimer *frame_timer;

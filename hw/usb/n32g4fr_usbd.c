@@ -9,7 +9,8 @@
  *
  * There is no real USB host on the other side, so the device contains a
  * minimal one, driven by a 1 ms frame timer. Once the firmware powers the
- * controller up, it resets the bus, enumerates the device over endpoint 0
+ * controller up and the DP pull-up is on (the "dp-pullup" input; on when
+ * unconnected), it resets the bus, enumerates the device over endpoint 0
  * (device and configuration descriptors, SET_ADDRESS, SET_CONFIGURATION),
  * opens the first CDC-ACM function it finds (SET_LINE_CODING 115200 8N1,
  * SET_CONTROL_LINE_STATE with DTR and RTS) and then bridges its bulk
@@ -664,10 +665,13 @@ static void n32g4fr_usbd_frame(void *opaque)
     }
 }
 
-/* Attach when the firmware takes the controller out of reset/power down */
+/*
+ * Attach when the firmware takes the controller out of reset/power down
+ * with the DP pull-up enabled (that is what a host detects)
+ */
 static void n32g4fr_usbd_check_attach(N32G4FRUsbdState *s)
 {
-    bool powered = !(s->ctrl & (CTRL_FRST | CTRL_PD));
+    bool powered = !(s->ctrl & (CTRL_FRST | CTRL_PD)) && s->dp_pullup;
 
     if (powered && s->host_state == HOST_DETACHED) {
         s->host_wait = HOST_ATTACH_FRAMES;
@@ -858,6 +862,14 @@ static void n32g4fr_usbd_reset(DeviceState *dev)
     n32g4fr_usbd_update_irq(s);
 }
 
+static void n32g4fr_usbd_set_dp_pullup(void *opaque, int n, int level)
+{
+    N32G4FRUsbdState *s = N32G4FR_USBD(opaque);
+
+    s->dp_pullup = level;
+    n32g4fr_usbd_check_attach(s);
+}
+
 static void n32g4fr_usbd_init(Object *obj)
 {
     N32G4FRUsbdState *s = N32G4FR_USBD(obj);
@@ -870,6 +882,9 @@ static void n32g4fr_usbd_init(Object *obj)
     sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->pma_mmio);
     sysbus_init_irq(SYS_BUS_DEVICE(obj), &s->irq_lp);
     sysbus_init_irq(SYS_BUS_DEVICE(obj), &s->irq_hp);
+    qdev_init_gpio_in_named(DEVICE(obj), n32g4fr_usbd_set_dp_pullup,
+                            "dp-pullup", 1);
+    s->dp_pullup = true;
 }
 
 static void n32g4fr_usbd_realize(DeviceState *dev, Error **errp)
@@ -892,8 +907,8 @@ static void n32g4fr_usbd_unrealize(DeviceState *dev)
 
 static const VMStateDescription vmstate_n32g4fr_usbd = {
     .name = TYPE_N32G4FR_USBD,
-    .version_id = 1,
-    .minimum_version_id = 1,
+    .version_id = 2,
+    .minimum_version_id = 2,
     .fields = (const VMStateField[]) {
         VMSTATE_UINT32_ARRAY(epr, N32G4FRUsbdState, N32G4FR_USBD_NUM_EPS),
         VMSTATE_UINT32(ctrl, N32G4FRUsbdState),
@@ -922,6 +937,7 @@ static const VMStateDescription vmstate_n32g4fr_usbd = {
         VMSTATE_INT8(bulk_out, N32G4FRUsbdState),
         VMSTATE_INT8(notify_in, N32G4FRUsbdState),
         VMSTATE_FIFO8(rx_fifo, N32G4FRUsbdState),
+        VMSTATE_BOOL(dp_pullup, N32G4FRUsbdState),
         VMSTATE_END_OF_LIST()
     }
 };
