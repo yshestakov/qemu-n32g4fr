@@ -25,8 +25,10 @@
  * the 40 kHz LSI; it is modelled as a timer on the virtual clock, which
  * stops while the VM is halted (e.g. by GDB), so like DBG_CTRL.IWDG_STOP
  * the watchdog never fires at a breakpoint.  Prescaler/reload updates
- * complete instantly (STS always reads 0).  The hardware watchdog option
- * byte (WDG_SW) and PWR_CTRL2.IWDGRSTEN = 0 are not modelled.
+ * complete instantly (STS always reads 0).  The "reset-enable" input is
+ * PWR_CTRL2.IWDGRSTEN: while it is low an expiry does not reset the chip
+ * and the counter starts again.  The hardware watchdog option byte
+ * (WDG_SW) is not modelled.
  */
 
 #include "qemu/osdep.h"
@@ -68,7 +70,13 @@ static void n32g4fr_iwdg_expired(void *opaque)
     N32G4FRIwdgState *s = N32G4FR_IWDG(opaque);
 
     trace_n32g4fr_iwdg_expired();
-    qemu_log_mask(CPU_LOG_RESET, "N32G4FR IWDG expired\n");
+    qemu_log_mask(CPU_LOG_RESET, "N32G4FR IWDG expired%s\n",
+                  s->reset_enable ? "" : " (reset disabled by PWR)");
+    if (!s->reset_enable) {
+        s->count = RELV_RESET;
+        n32g4fr_iwdg_arm(s);
+        return;
+    }
     if (get_watchdog_action() == WATCHDOG_ACTION_RESET) {
         /* Latch RCC_CTRLSTS.IWDGRSTF across the reset that follows */
         qemu_irq_pulse(s->reset_flag);
@@ -78,6 +86,13 @@ static void n32g4fr_iwdg_expired(void *opaque)
         n32g4fr_iwdg_arm(s);
     }
     watchdog_perform_action();
+}
+
+static void n32g4fr_iwdg_set_reset_enable(void *opaque, int n, int level)
+{
+    N32G4FRIwdgState *s = N32G4FR_IWDG(opaque);
+
+    s->reset_enable = level;
 }
 
 static void n32g4fr_iwdg_reset(DeviceState *dev)
@@ -190,13 +205,17 @@ static void n32g4fr_iwdg_init(Object *obj)
                           TYPE_N32G4FR_IWDG, N32G4FR_IWDG_PERIPHERAL_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->mmio);
     qdev_init_gpio_out_named(DEVICE(obj), &s->reset_flag, "reset-flag", 1);
+    qdev_init_gpio_in_named(DEVICE(obj), n32g4fr_iwdg_set_reset_enable,
+                            "reset-enable", 1);
+    /* PWR drives this; enabled when nothing is connected */
+    s->reset_enable = true;
     s->timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, n32g4fr_iwdg_expired, s);
 }
 
 static const VMStateDescription vmstate_n32g4fr_iwdg = {
     .name = TYPE_N32G4FR_IWDG,
-    .version_id = 1,
-    .minimum_version_id = 1,
+    .version_id = 2,
+    .minimum_version_id = 2,
     .fields = (const VMStateField[]) {
         VMSTATE_TIMER_PTR(timer, N32G4FRIwdgState),
         VMSTATE_UINT32(prediv, N32G4FRIwdgState),
@@ -204,6 +223,7 @@ static const VMStateDescription vmstate_n32g4fr_iwdg = {
         VMSTATE_UINT32(count, N32G4FRIwdgState),
         VMSTATE_BOOL(unlocked, N32G4FRIwdgState),
         VMSTATE_BOOL(running, N32G4FRIwdgState),
+        VMSTATE_BOOL(reset_enable, N32G4FRIwdgState),
         VMSTATE_END_OF_LIST()
     }
 };

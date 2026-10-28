@@ -50,6 +50,8 @@ struct N32G4FRIwdgState {
     uint32_t count;
     bool unlocked;
     bool running;
+    /* PWR_CTRL2.IWDGRSTEN: expiry resets the chip (default on) */
+    bool reset_enable;
 
     /* Pulsed when the watchdog resets the chip (RCC IWDGRSTF) */
     qemu_irq reset_flag;
