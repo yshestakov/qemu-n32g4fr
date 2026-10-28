@@ -113,6 +113,9 @@ config N32G4FR_PWR
 config N32G4FR_AFIO
     bool
 
+config N32G4FR_SYSCTL
+    bool
+
 config STM32F2XX_SYSCFG
     bool
 
