@@ -107,6 +107,9 @@ config STM32_RCC
 config N32G4FR_RCC
     bool
 
+config N32G4FR_PWR
+    bool
+
 config STM32F2XX_SYSCFG
     bool
 
