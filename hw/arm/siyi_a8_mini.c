@@ -78,6 +78,9 @@ struct SiyiA8MiniMachineState {
     MachineState parent_obj;
 
     uint32_t vtor;
+    /* Hex strings for the SoC's UID/UCID */
+    char *uid;
+    char *ucid;
 };
 
 static DeviceState *siyi_a8_mini_spi_device(MachineState *machine,
@@ -115,6 +118,12 @@ static void siyi_a8_mini_init(MachineState *machine)
     soc = N32G4FR_SOC(dev);
     object_property_add_child(OBJECT(machine), "soc", OBJECT(dev));
     qdev_connect_clock_in(dev, "sysclk", sysclk);
+    if (sms->uid) {
+        qdev_prop_set_string(dev, "uid", sms->uid);
+    }
+    if (sms->ucid) {
+        qdev_prop_set_string(dev, "ucid", sms->ucid);
+    }
     object_property_set_uint(OBJECT(&soc->armv7m), "init-nsvtor", sms->vtor,
                              &error_fatal);
     /* Optional flash backing file: -drive if=pflash,format=raw,file=... */
@@ -157,6 +166,33 @@ static void siyi_a8_mini_instance_init(Object *obj)
                                     "(default: application base 0x08003800)");
 }
 
+static char *siyi_a8_mini_get_uid(Object *obj, Error **errp)
+{
+    return g_strdup(SIYI_A8_MINI_MACHINE(obj)->uid);
+}
+
+static void siyi_a8_mini_set_uid(Object *obj, const char *value, Error **errp)
+{
+    SiyiA8MiniMachineState *sms = SIYI_A8_MINI_MACHINE(obj);
+
+    g_free(sms->uid);
+    sms->uid = g_strdup(value);
+}
+
+static char *siyi_a8_mini_get_ucid(Object *obj, Error **errp)
+{
+    return g_strdup(SIYI_A8_MINI_MACHINE(obj)->ucid);
+}
+
+static void siyi_a8_mini_set_ucid(Object *obj, const char *value,
+                                  Error **errp)
+{
+    SiyiA8MiniMachineState *sms = SIYI_A8_MINI_MACHINE(obj);
+
+    g_free(sms->ucid);
+    sms->ucid = g_strdup(value);
+}
+
 static void siyi_a8_mini_class_init(ObjectClass *oc, const void *data)
 {
     MachineClass *mc = MACHINE_CLASS(oc);
@@ -168,6 +204,19 @@ static void siyi_a8_mini_class_init(ObjectClass *oc, const void *data)
     mc->desc = "SIYI A8 mini gimbal controller (N32G4FR, Cortex-M4)";
     mc->init = siyi_a8_mini_init;
     mc->valid_cpu_types = valid_cpu_types;
+
+    object_class_property_add_str(oc, "uid", siyi_a8_mini_get_uid,
+                                  siyi_a8_mini_set_uid);
+    object_class_property_set_description(oc, "uid",
+                                          "96-bit unique device ID at "
+                                          "0x1FFFF7F0, 24 hex digits in "
+                                          "address order (default: zeros)");
+    object_class_property_add_str(oc, "ucid", siyi_a8_mini_get_ucid,
+                                  siyi_a8_mini_set_ucid);
+    object_class_property_set_description(oc, "ucid",
+                                          "128-bit unique customer ID at "
+                                          "0x1FFFF7C0, 32 hex digits in "
+                                          "address order (default: zeros)");
 }
 
 static const TypeInfo siyi_a8_mini_info = {
