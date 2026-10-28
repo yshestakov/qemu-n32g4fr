@@ -39,6 +39,7 @@
  * register compatible with the STM32F2xx model.
  */
 #define RCC_ADDR                       0x40021000
+#define IWDG_ADDR                      0x40003000
 #define FLASH_IF_ADDR                  0x40022000
 #define FLASH_IRQ                      4
 #define USBD_ADDR                      0x40005C00
@@ -116,6 +117,7 @@ static void n32g4fr_soc_initfn(Object *obj)
     object_initialize_child(obj, "armv7m", &s->armv7m, TYPE_ARMV7M);
 
     object_initialize_child(obj, "rcc", &s->rcc, TYPE_N32G4FR_RCC);
+    object_initialize_child(obj, "iwdg", &s->iwdg, TYPE_N32G4FR_IWDG);
 
     object_initialize_child(obj, "flash", &s->flash, TYPE_N32G4FR_FLASH);
 
@@ -265,6 +267,16 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
     }
     busdev = SYS_BUS_DEVICE(dev);
     sysbus_mmio_map(busdev, 0, RCC_ADDR);
+
+    /* Independent watchdog: its reset sets RCC_CTRLSTS.IWDGRSTF */
+    dev = DEVICE(&s->iwdg);
+    if (!sysbus_realize(SYS_BUS_DEVICE(dev), errp)) {
+        return;
+    }
+    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, IWDG_ADDR);
+    qdev_connect_gpio_out_named(dev, "reset-flag", 0,
+                                qdev_get_gpio_in_named(DEVICE(&s->rcc),
+                                                       "iwdg-reset", 0));
 
     /* DMA controllers */
     for (i = 0; i < N32_NUM_DMAS; i++) {
@@ -424,7 +436,6 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
     create_unimplemented_device("SYSCTL",      0x40001800, 0x400);
     create_unimplemented_device("RTC",         0x40002800, 0x400);
     create_unimplemented_device("WWDG",        0x40002C00, 0x400);
-    create_unimplemented_device("IWDG",        0x40003000, 0x400);
     create_unimplemented_device("I2C1",        0x40005400, 0x400);
     create_unimplemented_device("I2C2",        0x40005800, 0x400);
     create_unimplemented_device("CAN1",        0x40006400, 0x400);

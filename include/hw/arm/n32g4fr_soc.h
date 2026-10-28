@@ -27,6 +27,7 @@
 #define HW_ARM_N32G4FR_SOC_H
 
 #include "hw/misc/n32g4fr_rcc.h"
+#include "hw/watchdog/n32g4fr_iwdg.h"
 #include "hw/dma/n32g4fr_dma.h"
 #include "hw/gpio/n32g4fr_gpio.h"
 #include "hw/nvram/n32g4fr_flash.h"
@@ -76,6 +77,7 @@ struct N32G4FRState {
     ARMv7MState armv7m;
 
     N32G4FRRccState rcc;
+    N32G4FRIwdgState iwdg;
     N32G4FRFlashState flash;
     N32G4FRUsbdState usbd;
     N32G4FRDmaState dma[N32_NUM_DMAS];

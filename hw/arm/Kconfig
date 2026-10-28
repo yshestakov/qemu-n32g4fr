@@ -405,6 +405,7 @@ config N32G4FR_SOC
     select N32G4FR_DMA
     select N32G4FR_FLASH
     select N32G4FR_GPIO
+    select N32G4FR_IWDG
     select N32G4FR_RCC
     select N32G4FR_SPI
     select N32G4FR_USBD
