@@ -71,10 +71,22 @@ static inline int64_t stm32f2xx_ns_to_ticks(STM32F2XXTimerState *s, int64_t t)
     return muldiv64(t, s->freq_hz, 1000000000ULL) / (s->tim_psc + 1);
 }
 
+/* Counter value: the up-counter reloads from 0 after reaching ARR */
+static int64_t stm32f2xx_timer_count(STM32F2XXTimerState *s, int64_t now)
+{
+    int64_t cnt = stm32f2xx_ns_to_ticks(s, now) - s->tick_offset;
+    int64_t period = (int64_t)s->tim_arr + 1;
+
+    if (s->tim_arr == 0) {
+        return cnt;
+    }
+    cnt %= period;
+    return cnt < 0 ? cnt + period : cnt;
+}
+
 static void stm32f2xx_timer_set_alarm(STM32F2XXTimerState *s, int64_t now)
 {
     uint64_t ticks;
-    int64_t now_ticks;
 
     if (s->tim_arr == 0) {
         return;
@@ -82,15 +94,19 @@ static void stm32f2xx_timer_set_alarm(STM32F2XXTimerState *s, int64_t now)
 
     DB_PRINT("Alarm set at: 0x%x\n", s->tim_cr1);
 
-    now_ticks = stm32f2xx_ns_to_ticks(s, now);
-    ticks = s->tim_arr - (now_ticks - s->tick_offset);
+    /* Next update event: the counter overflows ARR */
+    ticks = s->tim_arr + 1 - stm32f2xx_timer_count(s, now);
 
     DB_PRINT("Alarm set in %d ticks\n", (int) ticks);
 
-    s->hit_time = muldiv64((ticks + (uint64_t) now_ticks) * (s->tim_psc + 1),
-                               1000000000ULL, s->freq_hz);
+    /*
+     * Absolute deadline; +1 ns so the counter has reached the overflow
+     * there despite the rounding down in muldiv64().
+     */
+    s->hit_time = muldiv64((stm32f2xx_ns_to_ticks(s, now) + ticks) *
+                           (s->tim_psc + 1), 1000000000ULL, s->freq_hz) + 1;
 
-    timer_mod(s->timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + s->hit_time);
+    timer_mod(s->timer, s->hit_time);
     DB_PRINT("Wait Time: %" PRId64 " ticks\n", s->hit_time);
 }
 
@@ -99,6 +115,7 @@ static void stm32f2xx_timer_reset(DeviceState *dev)
     STM32F2XXTimerState *s = STM32F2XXTIMER(dev);
     int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
 
+    timer_del(s->timer);
     s->tim_cr1 = 0;
     s->tim_cr2 = 0;
     s->tim_smcr = 0;
@@ -148,8 +165,7 @@ static uint64_t stm32f2xx_timer_read(void *opaque, hwaddr offset,
     case TIM_CCER:
         return s->tim_ccer;
     case TIM_CNT:
-        return stm32f2xx_ns_to_ticks(s, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL)) -
-               s->tick_offset;
+        return stm32f2xx_timer_count(s, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
     case TIM_PSC:
         return s->tim_psc;
     case TIM_ARR:
@@ -220,7 +236,7 @@ static void stm32f2xx_timer_write(void *opaque, hwaddr offset,
         s->tim_ccer = value;
         return;
     case TIM_PSC:
-        timer_val = stm32f2xx_ns_to_ticks(s, now) - s->tick_offset;
+        timer_val = stm32f2xx_timer_count(s, now);
         s->tim_psc = value & 0xFFFF;
         break;
     case TIM_CNT:
