@@ -53,6 +53,8 @@ struct N32G4FRRccState {
     MemoryRegion mmio;
 
     uint32_t regs[N32G4FR_RCC_NREGS];
+    /* CTRLSTS reset flags latched for the next reset (e.g. IWDGRSTF) */
+    uint32_t pending_rst_flags;
 };
 
 #endif /* HW_N32G4FR_RCC_H */

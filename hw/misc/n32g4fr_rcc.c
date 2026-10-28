@@ -61,6 +61,7 @@
 #define CTRLSTS_LSIEN       BIT(0)
 #define CTRLSTS_LSIRD       BIT(1)
 #define CTRLSTS_RMRSTF      BIT(24)
+#define CTRLSTS_IWDGRSTF    BIT(29)
 #define CTRLSTS_FLAGS_MASK  0xFEB80000  /* bits 31:25, 23, 21:19 */
 
 /* Reset values */
@@ -81,9 +82,20 @@ static void n32g4fr_rcc_reset(DeviceState *dev)
     s->regs[N32G4FR_RCC_CTRL >> 2] = CTRL_RESET;
     s->regs[N32G4FR_RCC_CFG >> 2] = CFG_RESET;
     s->regs[N32G4FR_RCC_AHBPCLKEN >> 2] = AHBPCLKEN_RESET;
-    s->regs[N32G4FR_RCC_CTRLSTS >> 2] = CTRLSTS_RESET;
+    s->regs[N32G4FR_RCC_CTRLSTS >> 2] = CTRLSTS_RESET | s->pending_rst_flags;
+    s->pending_rst_flags = 0;
     s->regs[N32G4FR_RCC_CFG2 >> 2] = CFG2_RESET;
     s->regs[N32G4FR_RCC_CFG3 >> 2] = CFG3_RESET;
+}
+
+/* The IWDG resets the chip: report it in CTRLSTS after that reset */
+static void n32g4fr_rcc_iwdg_reset(void *opaque, int n, int level)
+{
+    N32G4FRRccState *s = N32G4FR_RCC(opaque);
+
+    if (level) {
+        s->pending_rst_flags |= CTRLSTS_IWDGRSTF;
+    }
 }
 
 static uint64_t n32g4fr_rcc_read(void *opaque, hwaddr addr, unsigned int size)
@@ -182,14 +194,17 @@ static void n32g4fr_rcc_init(Object *obj)
     memory_region_init_io(&s->mmio, obj, &n32g4fr_rcc_ops, s,
                           TYPE_N32G4FR_RCC, N32G4FR_RCC_PERIPHERAL_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->mmio);
+    qdev_init_gpio_in_named(DEVICE(obj), n32g4fr_rcc_iwdg_reset,
+                            "iwdg-reset", 1);
 }
 
 static const VMStateDescription vmstate_n32g4fr_rcc = {
     .name = TYPE_N32G4FR_RCC,
-    .version_id = 1,
-    .minimum_version_id = 1,
+    .version_id = 2,
+    .minimum_version_id = 2,
     .fields = (const VMStateField[]) {
         VMSTATE_UINT32_ARRAY(regs, N32G4FRRccState, N32G4FR_RCC_NREGS),
+        VMSTATE_UINT32(pending_rst_flags, N32G4FRRccState),
         VMSTATE_END_OF_LIST()
     }
 };
