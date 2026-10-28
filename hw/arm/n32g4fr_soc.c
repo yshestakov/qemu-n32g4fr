@@ -29,6 +29,7 @@
 #include "system/system.h"
 #include "hw/arm/n32g4fr_soc.h"
 #include "hw/core/qdev-clock.h"
+#include "hw/core/qdev-properties.h"
 #include "hw/misc/unimp.h"
 
 /*
@@ -150,6 +151,32 @@ static void n32g4fr_soc_initfn(Object *obj)
 
     s->sysclk = qdev_init_clock_in(DEVICE(s), "sysclk", NULL, NULL, 0);
     s->refclk = qdev_init_clock_in(DEVICE(s), "refclk", NULL, NULL, 0);
+}
+
+/* Fill len bytes at buf from a hex string (missing digits read as 0) */
+static bool n32g4fr_parse_id(const char *name, const char *hex, uint8_t *buf,
+                             size_t len, Error **errp)
+{
+    size_t i;
+
+    memset(buf, 0, len);
+    if (!hex) {
+        return true;
+    }
+    if (strlen(hex) > len * 2) {
+        error_setg(errp, "%s must be at most %zu hex digits", name, len * 2);
+        return false;
+    }
+    for (i = 0; hex[i]; i++) {
+        int v = g_ascii_xdigit_value(hex[i]);
+
+        if (v < 0) {
+            error_setg(errp, "%s: invalid hex digit '%c'", name, hex[i]);
+            return false;
+        }
+        buf[i / 2] |= v << (i % 2 ? 0 : 4);
+    }
+    return true;
 }
 
 static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
@@ -358,7 +385,33 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
         sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, timer_irq[i]));
     }
 
-    /* System memory (ROM bootloader), UID/UCID and option bytes */
+    /*
+     * System configuration area: UCID and UID (UM 31.1), the rest reads
+     * erased.  The SIYI firmware reads a 96-bit ID at 0x1FFFF270 first and
+     * falls back to the UID only if that reads 0xFFFFFFFF.
+     * TODO confirm: 0x1FFFF270 is not documented in UM V3.5.0.
+     */
+    memory_region_init_rom(&s->syscfg, OBJECT(dev_soc), "N32G4FR.syscfg",
+                           N32_SYSCFG_SIZE, &err);
+    if (err != NULL) {
+        error_propagate(errp, err);
+        return;
+    }
+    {
+        uint8_t *p = memory_region_get_ram_ptr(&s->syscfg);
+
+        memset(p, 0xff, N32_SYSCFG_SIZE);
+        if (!n32g4fr_parse_id("uid", s->uid, p + N32_UID_OFFSET,
+                              N32_UID_SIZE, errp) ||
+            !n32g4fr_parse_id("ucid", s->ucid, p + N32_UCID_OFFSET,
+                              N32_UCID_SIZE, errp)) {
+            return;
+        }
+    }
+    memory_region_add_subregion_overlap(system_memory, N32_SYSCFG_BASE_ADDRESS,
+                                        &s->syscfg, 1);
+
+    /* System memory (ROM bootloader) and option bytes */
     create_unimplemented_device("System memory", 0x1FFF0000, 0x10000);
 
     /* APB1 */
@@ -399,11 +452,17 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
     create_unimplemented_device("QSPI",        0xA0001000, 0x400);
 }
 
+static const Property n32g4fr_soc_properties[] = {
+    DEFINE_PROP_STRING("uid", N32G4FRState, uid),
+    DEFINE_PROP_STRING("ucid", N32G4FRState, ucid),
+};
+
 static void n32g4fr_soc_class_init(ObjectClass *klass, const void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
 
     dc->realize = n32g4fr_soc_realize;
+    device_class_set_props(dc, n32g4fr_soc_properties);
     /* No vmstate or reset required: device has no internal state */
 }
 

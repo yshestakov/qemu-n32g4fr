@@ -62,6 +62,14 @@ OBJECT_DECLARE_SIMPLE_TYPE(N32G4FRState, N32G4FR_SOC)
 #define N32_SRAM_ALIAS_BASE_ADDRESS 0x10000000
 #define N32_SRAM_ALIAS_SIZE (128 * 1024)
 
+/* System configuration area, UM V3.5.0 Table 2-2 and section 31.1 */
+#define N32_SYSCFG_BASE_ADDRESS 0x1FFFF000
+#define N32_SYSCFG_SIZE 0x800
+#define N32_UCID_OFFSET 0x7C0
+#define N32_UCID_SIZE 16
+#define N32_UID_OFFSET 0x7F0
+#define N32_UID_SIZE 12
+
 struct N32G4FRState {
     SysBusDevice parent_obj;
 
@@ -81,6 +89,11 @@ struct N32G4FRState {
     MemoryRegion sram;
     MemoryRegion sram_alias;
     MemoryRegion flash_alias;
+    MemoryRegion syscfg;
+
+    /* Hex strings for the UID/UCID in the system configuration area */
+    char *uid;
+    char *ucid;
 
     Clock *sysclk;
     Clock *refclk;
