@@ -12,6 +12,9 @@
  * flash reads as 0xFF. With a "drive" (e.g. -drive if=pflash,format=raw)
  * the array is loaded from the backing file and every program/erase is
  * written back to it, so data the guest stores in flash persists.
+ * Under record/replay the file is not written: a synchronous block write
+ * from the vCPU thread would wait for the main loop, which waits for the
+ * replay lock the vCPU holds. Snapshots still capture the array (RAM).
  *
  * Not modelled: option byte programming, read/write protection, the flash
  * encryption, ECC and the iCache.
@@ -38,6 +41,7 @@
 #include "qemu/osdep.h"
 #include "qapi/error.h"
 #include "qemu/error-report.h"
+#include "system/replay.h"
 #include "qemu/log.h"
 #include "qemu/bitops.h"
 #include "trace.h"
@@ -117,7 +121,7 @@ static void n32g4fr_flash_sync(N32G4FRFlashState *s, hwaddr offset,
 {
     memory_region_flush_rom_device(&s->flash, offset, size);
 
-    if (s->blk &&
+    if (s->blk && replay_mode == REPLAY_MODE_NONE &&
         blk_pwrite(s->blk, offset, size, s->storage + offset, 0) < 0) {
         error_report("%s: failed to write backing file", __func__);
     }
