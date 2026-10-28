@@ -29,6 +29,7 @@
 #include "hw/misc/n32g4fr_rcc.h"
 #include "hw/misc/n32g4fr_pwr.h"
 #include "hw/misc/n32g4fr_afio.h"
+#include "hw/misc/n32g4fr_sysctl.h"
 #include "hw/watchdog/n32g4fr_iwdg.h"
 #include "hw/dma/n32g4fr_dma.h"
 #include "hw/gpio/n32g4fr_gpio.h"
@@ -82,6 +83,7 @@ struct N32G4FRState {
     N32G4FRIwdgState iwdg;
     N32G4FRPwrState pwr;
     N32G4FRAfioState afio;
+    N32G4FRSysctlState sysctl;
     N32G4FRFlashState flash;
     N32G4FRUsbdState usbd;
     N32G4FRDmaState dma[N32_NUM_DMAS];

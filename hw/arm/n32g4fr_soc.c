@@ -42,6 +42,7 @@
 #define IWDG_ADDR                      0x40003000
 #define PWR_ADDR                       0x40007000
 #define AFIO_ADDR                      0x40010000
+#define SYSCTL_ADDR                    0x40001800
 #define FLASH_IF_ADDR                  0x40022000
 #define FLASH_IRQ                      4
 #define USBD_ADDR                      0x40005C00
@@ -122,6 +123,7 @@ static void n32g4fr_soc_initfn(Object *obj)
     object_initialize_child(obj, "iwdg", &s->iwdg, TYPE_N32G4FR_IWDG);
     object_initialize_child(obj, "pwr", &s->pwr, TYPE_N32G4FR_PWR);
     object_initialize_child(obj, "afio", &s->afio, TYPE_N32G4FR_AFIO);
+    object_initialize_child(obj, "sysctl", &s->sysctl, TYPE_N32G4FR_SYSCTL);
 
     object_initialize_child(obj, "flash", &s->flash, TYPE_N32G4FR_FLASH);
 
@@ -365,6 +367,19 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
     sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, USB_LP_IRQ));
     sysbus_connect_irq(busdev, 1, qdev_get_gpio_in(armv7m, USB_HP_IRQ));
 
+    /*
+     * Undocumented block, reserved in the memory map; the UM USB chapter
+     * places the USB DP pull-up enable at bit 28 of 0x40001820
+     */
+    dev = DEVICE(&s->sysctl);
+    if (!sysbus_realize(SYS_BUS_DEVICE(dev), errp)) {
+        return;
+    }
+    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, SYSCTL_ADDR);
+    qdev_connect_gpio_out_named(dev, "usb-dp-pullup", 0,
+                                qdev_get_gpio_in_named(DEVICE(&s->usbd),
+                                                       "dp-pullup", 0));
+
     /* SPI controllers */
     for (i = 0; i < N32_NUM_SPIS; i++) {
         DeviceState *dma = DEVICE(&s->dma[spi_dma[i][0]]);
@@ -450,11 +465,6 @@ static void n32g4fr_soc_realize(DeviceState *dev_soc, Error **errp)
     /* APB1 */
     create_unimplemented_device("timer[6]",    0x40001000, 0x400);
     create_unimplemented_device("timer[7]",    0x40001400, 0x400);
-    /*
-     * Shown as reserved in the memory map, but the UM USB chapter places
-     * the USB DP pull-up enable at bit 28 of 0x40001820.
-     */
-    create_unimplemented_device("SYSCTL",      0x40001800, 0x400);
     create_unimplemented_device("RTC",         0x40002800, 0x400);
     create_unimplemented_device("WWDG",        0x40002C00, 0x400);
     create_unimplemented_device("I2C1",        0x40005400, 0x400);
